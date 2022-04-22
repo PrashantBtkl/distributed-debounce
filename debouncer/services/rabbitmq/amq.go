@@ -1,9 +1,9 @@
-package mq
+package rabbitmq
 
 import (
 	"time"
 
-	"github.com/PrashantBtkl/distributed-debounce/debouncer/config"
+	"github.com/PrashantBtkl/distributed-debounce/debouncer/model"
 	"github.com/apex/log"
 	"github.com/pkg/errors"
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -21,7 +21,7 @@ type RabbitMQ struct {
 	quitChann  chan bool
 }
 
-func initRabbitMQ(config config.AMQP) (*RabbitMQ, error) {
+func InitRabbitMQ(config model.AMQP) (*RabbitMQ, error) {
 	rmq := &RabbitMQ{
 		URL:      config.URL,
 		Exchange: config.Exchange,
