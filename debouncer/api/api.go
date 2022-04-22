@@ -44,17 +44,21 @@ func (l *HTTPListener) debounceHandler(w http.ResponseWriter, r *http.Request) {
     } else {
         l.db.UpdateBuffer(userID, 10000)
     }
-
+    var rmqBody []byte
+    rmqBody = []byte(strconv.Itoa(userID))
     //2. send message to rabbitmq
+    l.mq.PublishWithDelay("delayed", rmqBody, 10000)
+    if err != nil {
+        log.WithFields(log.Fields{
+            "service": service,
+            "err":     err.Error(),
+        }).Error("failed to publish message to rabbitmq")
+    }
 
 }
 
 func NewHTTPListener(host string, port string) (*HTTPListener, error) {
     var config model.Config
-    rmq, err := rabbitmq.InitRabbitMQ(config.AMQP)
-    if err != nil {
-        log.Fatalf("run: failed to init rabbitmq: %v", err)
-    }
 
     db, err := store.NewPGStore(store.PGDSN(config.DB.PGHost, config.DB.PGUser, config.DB.PGPassword, config.DB.PGDB, config.DB.PGPort))
     if err != nil {
@@ -63,6 +67,11 @@ func NewHTTPListener(host string, port string) (*HTTPListener, error) {
             "err":     err.Error(),
         }).Error("Failed to create db")
         return nil, err
+    }
+
+    rmq, err := rabbitmq.InitRabbitMQ(config.AMQP, db)
+    if err != nil {
+        log.Fatalf("run: failed to init rabbitmq: %v", err)
     }
 
     ret := &HTTPListener{

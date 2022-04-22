@@ -1,9 +1,11 @@
 package rabbitmq
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/PrashantBtkl/distributed-debounce/debouncer/model"
+	"github.com/PrashantBtkl/distributed-debounce/debouncer/services/store"
 	"github.com/apex/log"
 	"github.com/pkg/errors"
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -21,25 +23,25 @@ type RabbitMQ struct {
 	quitChann  chan bool
 }
 
-func InitRabbitMQ(config model.AMQP) (*RabbitMQ, error) {
+func InitRabbitMQ(config model.AMQP, db *store.PGStore) (*RabbitMQ, error) {
 	rmq := &RabbitMQ{
 		URL:      config.URL,
 		Exchange: config.Exchange,
 	}
 
-	err := rmq.load()
+	err := rmq.load(db)
 	if err != nil {
 		return nil, err
 	}
 
 	rmq.quitChann = make(chan bool)
 
-	go rmq.handleDisconnect()
+	go rmq.handleDisconnect(db)
 
 	return rmq, err
 }
 
-func (rmq *RabbitMQ) load() error {
+func (rmq *RabbitMQ) load(db *store.PGStore) error {
 	var err error
 
 	rmq.Conn, err = amqp.Dial(rmq.URL)
@@ -70,7 +72,7 @@ func (rmq *RabbitMQ) load() error {
 		return errors.Wrapf(err, "declaring exchange %q", "delayed")
 	}
 
-	err = declareConsumer(rmq)
+	err = declareConsumer(rmq, db)
 	if err != nil {
 		return err
 	}
@@ -79,7 +81,7 @@ func (rmq *RabbitMQ) load() error {
 }
 
 // declareConsumer declares all queues and bindings for the consumer
-func declareConsumer(rmq *RabbitMQ) error {
+func declareConsumer(rmq *RabbitMQ, db *store.PGStore) error {
 	var err error
 
 	// rmq.Queue, err = rmq.Chann.QueueDeclare("user-created-queue", true, false, false, false, nil)
@@ -119,12 +121,12 @@ func declareConsumer(rmq *RabbitMQ) error {
 		return err
 	}
 
-	go consume(published)
+	go consume(published, db)
 
 	return nil
 }
 
-func consume(ds <-chan amqp.Delivery) {
+func consume(ds <-chan amqp.Delivery, db *store.PGStore) {
 	for {
 		log.Debug("start listenning to consume")
 
@@ -134,6 +136,14 @@ func consume(ds <-chan amqp.Delivery) {
 				return
 			}
 			log.Infof("consume %s", string(d.Body))
+			userid, _ := strconv.Atoi(string(d.Body))
+			debounce, err := db.CheckBuffer(userid)
+			if err != nil {
+				log.Errorf("check debounce buffer for %s", string(d.Body), "failed")
+			}
+			if debounce.DebounceBuffer <= time.Now().Unix() {
+				//call reward(service B) api
+			}
 			d.Ack(false)
 		}
 	}
@@ -149,7 +159,7 @@ func (rmq *RabbitMQ) Shutdown() {
 }
 
 // handleDisconnect handle a disconnection trying to reconnect every 5 seconds
-func (rmq *RabbitMQ) handleDisconnect() {
+func (rmq *RabbitMQ) handleDisconnect(db *store.PGStore) {
 	for {
 		select {
 		case errChann := <-rmq.closeChann:
@@ -167,7 +177,7 @@ func (rmq *RabbitMQ) handleDisconnect() {
 
 		time.Sleep(5 * time.Second)
 
-		if err := rmq.load(); err != nil {
+		if err := rmq.load(db); err != nil {
 			log.Errorf("rabbitMQ error: %v", err)
 		}
 	}
