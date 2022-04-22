@@ -57,19 +57,19 @@ func (l *HTTPListener) debounceHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func NewHTTPListener(host string, port string) (*HTTPListener, error) {
-    var config model.Config
+func NewHTTPListener(host string, port string) error {
 
-    db, err := store.NewPGStore(store.PGDSN(config.DB.PGHost, config.DB.PGUser, config.DB.PGPassword, config.DB.PGDB, config.DB.PGPort))
+    db, err := store.NewPGStore(store.PGDSN("127.0.0.1", "postgres", "password", "debounce", "5432"))
     if err != nil {
         log.WithFields(log.Fields{
             "service": service,
             "err":     err.Error(),
         }).Error("Failed to create db")
-        return nil, err
+        return err
     }
+    var amqp = model.AMQP{URL: "amqp://guest:guest@127.0.0.1:5672/", Exchange: "amq.direct"}
 
-    rmq, err := rabbitmq.InitRabbitMQ(config.AMQP, db)
+    rmq, err := rabbitmq.InitRabbitMQ(amqp, db)
     if err != nil {
         log.Fatalf("run: failed to init rabbitmq: %v", err)
     }
@@ -85,7 +85,6 @@ func NewHTTPListener(host string, port string) (*HTTPListener, error) {
     api_version := "api/v1"
     r.HandleFunc("/ping", ret.homeHandler)
     r.HandleFunc("/"+api_version+"/{id:[0-9]+}", ret.debounceHandler).Methods("GET")
-    http.Handle("/", r)
 
     srv := &http.Server{
         Handler: r,
@@ -96,5 +95,5 @@ func NewHTTPListener(host string, port string) (*HTTPListener, error) {
     }
 
     ret.srv = srv
-    return ret, nil
+    return nil
 }

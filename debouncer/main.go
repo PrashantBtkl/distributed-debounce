@@ -39,7 +39,7 @@ func httpListener(done chan<- int) {
 
 	retries := 0
 	for retries < 5 {
-		l, err := api.NewHTTPListener("0.0.0.0", "1234")
+		err := api.NewHTTPListener("0.0.0.0", "1234")
 		if err != nil {
 			log.WithFields(log.Fields{
 				"err": err.Error(),
@@ -48,7 +48,6 @@ func httpListener(done chan<- int) {
 			time.Sleep(3 * time.Second)
 			continue
 		}
-		l.Listen()
 		time.Sleep(3 * time.Second)
 		retries++
 	}

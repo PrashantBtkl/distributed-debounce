@@ -31,7 +31,7 @@ func NewPGStore(dsn string) (*PGStore, error) {
 }
 
 func (db *PGStore) UpdateBuffer(user int, bufferDuration int64) {
-	debounce := &model.DebounceBuffer{userID: user, debounceBuffer: time.Now().Unix() + bufferDuration}
+	debounce := &model.DebounceBuffer{UserID: user, DebounceBuffer: time.Now().Unix() + bufferDuration}
 	if db.db.Model(&model.DebounceBuffer{}).Where("user_id = ?", user).Updates(debounce).RowsAffected == 0 {
 		db.db.Create(debounce)
 	}
@@ -39,7 +39,7 @@ func (db *PGStore) UpdateBuffer(user int, bufferDuration int64) {
 }
 
 func (db *PGStore) CheckBuffer(user int) (*model.DebounceBuffer, error) {
-	debounce := &model.DebounceBuffer{userID: user}
+	debounce := &model.DebounceBuffer{UserID: user}
 	err := db.db.Find(debounce).Error
 	if err != nil {
 		return nil, err
